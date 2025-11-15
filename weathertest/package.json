@@ -1,0 +1,8 @@
+{
+  "name": "weather-forecast-app",
+  "version": "1.0.0",
+  "description": "Weather forecast app with Netlify serverless functions",
+  "dependencies": {
+    "node-fetch": "^2.6.1"
+  }
+}

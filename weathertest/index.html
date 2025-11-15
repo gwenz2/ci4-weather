@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Weather</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 40px; background: #f9f9f9; }
+    h1 { font-size: 2.2em; margin-bottom: 0.2em; }
+    .current-date { font-size: 1.2em; color: #555; margin-bottom: 1em; }
+    .day {
+      display: inline-block;
+      background: #fff;
+      border-radius: 12px;
+      margin: 12px;
+      padding: 18px 12px;
+      width: 180px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      vertical-align: top;
+      transition: box-shadow 0.2s;
+    }
+    .day:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.13);
+      background: #f0f8ff;
+    }
+    .day h3 { margin: 0 0 8px 0; font-size: 1.1em; color: #1976d2; }
+    .day p { margin: 6px 0; font-size: 1em; }
+    .day b { color: #d32f2f; }
+    .info { margin-top: 20px; font-size: 14px; color: gray; }
+    button { font-size: 1em; padding: 8px 18px; border-radius: 6px; border: none; background: #1976d2; color: #fff; margin: 0 4px 10px 4px; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #1565c0; }
+  </style>
+</head>
+<body>
+  <h1>Weather Forecast</h1>
+  <div class="current-date" id="currentDate"></div>
+  <button id="showToday" style="margin-bottom:10px;">Show Today</button>
+  <button id="showTomorrow" style="margin-bottom:10px;">Show Tomorrow</button>
+  <div id="weather">Loading...</div>
+  <div class="info" id="info"></div>
+
+  <script>
+    // Settings
+    const city = 'Isulan, Sultan Kudarat, Philippines';
+    const lat = 6.6297;
+    const lon = 124.7472;
+
+    let weatherData = null;
+    let currentDay = '';
+
+    function renderDay(dayLabel) {
+      if (!weatherData) return;
+      let html = `<h2>${weatherData.location}</h2>`;
+      let filtered = weatherData.forecast.filter(f => f.date === dayLabel);
+      document.getElementById('currentDate').innerText = dayLabel;
+      if (filtered.length === 0) {
+        html += `<p>No data for ${dayLabel}</p>`;
+      } else {
+        html += `<table class="weather-table" style="margin:0 auto; border-collapse:collapse; width:90%; max-width:700px; background:#fff; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.07);">
+          <thead>
+            <tr style="background:#1976d2; color:#fff;">
+              <th style="padding:10px;">Hour(s)</th>
+              <th style="padding:10px;">Condition</th>
+              <th style="padding:10px;">Temp (°C)</th>
+              <th style="padding:10px;">Precipitation (mm)</th>
+            </tr>
+          </thead>
+          <tbody>`;
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentDayLabel = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        // Group consecutive rows with same condition, but split out the current hour
+        let groups = [];
+        let last = null;
+        filtered.forEach((row, idx) => {
+          // Parse hour string like '3 PM' to 24-hour format
+          let hour24 = null;
+          if (row.hour) {
+            const match = row.hour.match(/^(\d{1,2})\s*(AM|PM)$/);
+            if (match) {
+              hour24 = parseInt(match[1], 10);
+              if (match[2] === 'PM' && hour24 !== 12) hour24 += 12;
+              if (match[2] === 'AM' && hour24 === 12) hour24 = 0;
+            }
+          }
+          const isCurrent = (hour24 !== null && hour24 === currentHour && dayLabel === currentDayLabel);
+          if (isCurrent) {
+            // Insert current hour as its own group
+            groups.push({
+              condition: row.condition,
+              start: idx,
+              end: idx,
+              hours: [row.hour],
+              temps: [row.temperature],
+              precs: [row.precipitation],
+              highlight: true
+            });
+            last = null; // break group
+          } else if (!last || row.condition !== last.condition) {
+            groups.push({
+              condition: row.condition,
+              start: idx,
+              end: idx,
+              hours: [row.hour],
+              temps: [row.temperature],
+              precs: [row.precipitation],
+              highlight: false
+            });
+            last = groups[groups.length - 1];
+          } else {
+            last.end = idx;
+            last.hours.push(row.hour);
+            last.temps.push(row.temperature);
+            last.precs.push(row.precipitation);
+          }
+        });
+        
+        groups.forEach(group => {
+          // Time range
+          let hourLabel = group.hours[0];
+          if (group.hours.length > 1) hourLabel += ' – ' + group.hours[group.hours.length - 1];
+          // Average temp/precip
+          let avgTemp = group.temps.filter(x => x !== null && x !== undefined);
+          avgTemp = avgTemp.length ? (avgTemp.reduce((a,b)=>a+b,0)/avgTemp.length).toFixed(1) : 'N/A';
+          let avgPrecip = group.precs.filter(x => x !== null && x !== undefined);
+          avgPrecip = avgPrecip.length ? (avgPrecip.reduce((a,b)=>a+b,0)/avgPrecip.length).toFixed(2) : 'N/A';
+          html += `
+            <tr${group.highlight ? ' style="background:#ffe082;"' : ''}>
+              <td style="padding:8px; border-bottom:1px solid #eee;">${hourLabel}</td>
+              <td style="padding:8px; border-bottom:1px solid #eee;"><b>${group.condition ? group.condition : 'N/A'}</b></td>
+              <td style="padding:8px; border-bottom:1px solid #eee;">${avgTemp}</td>
+              <td style="padding:8px; border-bottom:1px solid #eee;">${avgPrecip}</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+      }
+      document.getElementById('weather').innerHTML = html;
+      document.getElementById('info').innerText = 
+        `Source: LIVE | Last update: ${weatherData.last_update}`;
+    }
+
+    async function loadWeather() {
+      try {
+        // Fetch directly from Open-Meteo API
+        const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,weathercode&timezone=auto`;
+        const response = await fetch(apiUrl);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch weather data');
+        }
+        
+        const data = await response.json();
+        
+        // Process forecast data
+        const forecast = [];
+        if (data.hourly && data.hourly.time) {
+          const now = new Date();
+          const today = now.toISOString().split('T')[0];
+          const tomorrow = new Date(now.getTime() + 86400000).toISOString().split('T')[0];
+          
+          const weatherCodes = {
+            0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Cloudy',
+            45: 'Foggy', 48: 'Foggy',
+            51: 'Light rain', 53: 'Light rain', 55: 'Light rain',
+            56: 'Freezing rain', 57: 'Freezing rain',
+            61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+            66: 'Freezing rain', 67: 'Heavy freezing rain',
+            71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow',
+            80: 'Light rain', 81: 'Rain showers', 82: 'Heavy rain',
+            85: 'Light snow', 86: 'Heavy snow',
+            95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm'
+          };
+          
+          data.hourly.time.forEach((isoTime, i) => {
+            const dt = new Date(isoTime);
+            const date = dt.toISOString().split('T')[0];
+            
+            if (date === today || date === tomorrow) {
+              const monthDayYear = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              const hour = dt.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+              const temp = data.hourly.temperature_2m[i] ? Math.round(data.hourly.temperature_2m[i]) : null;
+              const precip = data.hourly.precipitation[i] || 0;
+              const code = data.hourly.weathercode[i];
+              const condition = weatherCodes[code] || 'Unknown';
+              
+              let desc = condition;
+              if (precip > 0) {
+                desc += ' with rain';
+              } else if (temp !== null && temp >= 32) {
+                desc += ' and hot';
+              }
+              
+              forecast.push({
+                date: monthDayYear,
+                hour: hour,
+                temperature: temp,
+                precipitation: precip,
+                condition: desc
+              });
+            }
+          });
+        }
+        
+        weatherData = {
+          location: city,
+          latitude: lat,
+          longitude: lon,
+          forecast: forecast,
+          source: 'live',
+          last_update: new Date().toISOString().replace('T', ' ').substring(0, 19)
+        };
+        
+        // Get today and tomorrow labels from forecast
+        let days = [...new Set(weatherData.forecast.map(f => f.date))];
+        currentDay = days[0];
+        renderDay(currentDay);
+        
+      } catch (error) {
+        document.getElementById('weather').innerText = 'Error: ' + error.message;
+      }
+    }
+
+    document.getElementById('showToday').onclick = function() {
+      if (!weatherData) return;
+      let days = [...new Set(weatherData.forecast.map(f => f.date))];
+      currentDay = days[0];
+      renderDay(currentDay);
+    };
+    
+    document.getElementById('showTomorrow').onclick = function() {
+      if (!weatherData) return;
+      let days = [...new Set(weatherData.forecast.map(f => f.date))];
+      currentDay = days[1] || days[0];
+      renderDay(currentDay);
+    };
+
+    loadWeather();
+  </script>
+</body>
+</html>
